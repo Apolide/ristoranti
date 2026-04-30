@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Percorsi ristoranti Monopoli per CAP</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; }
+    #container { display: flex; height: 100%; }
+    #sidebar { width: 390px; max-width: 45vw; overflow: auto; padding: 16px; box-sizing: border-box; border-right: 1px solid #dde3ea; background: #fbfcfe; }
+    #map { flex: 1; height: 100%; }
+    h1 { font-size: 20px; margin: 0 0 8px; line-height: 1.2; }
+    .note { font-size: 13px; color: #526071; line-height: 1.4; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: #4a5568; margin: 12px 0 5px; }
+    select, input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; background: white; }
+    .status { margin: 12px 0; padding: 10px; background: #eef6ff; border: 1px solid #cfe4ff; border-radius: 10px; font-size: 13px; line-height: 1.4; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+    .metric { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; }
+    .metric .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+    .metric .value { font-size: 18px; font-weight: 800; margin-top: 3px; }
+    .restaurant-list { margin-top: 12px; }
+    .restaurant-card { padding: 10px; margin-bottom: 8px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
+    .restaurant-card:hover { border-color: #3b82f6; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08); }
+    .restaurant-title { font-weight: 750; font-size: 14px; margin-bottom: 3px; }
+    .restaurant-meta { font-size: 12px; color: #64748b; line-height: 1.35; }
+    .marker-label { background: #2563eb; color: white; border-radius: 999px; min-width: 24px; height: 24px; padding: 0 2px; display: flex; align-items: center; justify-content: center; font-weight: 800; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.35); font-size: 12px; }
+    .popup h3 { margin: 0 0 8px; font-size: 16px; }
+    .popup-row { margin: 5px 0; }
+    .popup-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .03em; }
+    .popup-value { font-size: 13px; }
+    .popup-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .popup-actions a { text-decoration: none; color: white; background: #2563eb; padding: 7px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; }
+    .popup-actions a.secondary { background: #475569; }
+    @media (max-width: 800px) {
+      #container { flex-direction: column; }
+      #sidebar { width: 100%; max-width: none; height: 42%; border-right: none; border-bottom: 1px solid #dde3ea; }
+      #map { height: 58%; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+  <aside id="sidebar">
+    <h1>Percorsi ristoranti Monopoli per CAP</h1>
+    <div class="note">
+      I locali sono raggruppati per CAP ricavato dall'indirizzo. L'ordine di visita dentro ogni CAP è ottimizzato in modo euristico sulle coordinate.
+      La rotta pedonale reale viene richiesta online a OSRM; se non risponde, resta visibile la linea indicativa.
+    </div>
+    <label for="capSelect">CAP</label>
+    <select id="capSelect"></select>
+    <label for="searchInput">Cerca nel CAP selezionato</label>
+    <input id="searchInput" type="search" placeholder="Nome, indirizzo, cucina..." />
+    <div id="status" class="status">Caricamento mappa...</div>
+    <div class="metrics">
+      <div class="metric"><div class="label">Locali</div><div id="countMetric" class="value">-</div></div>
+      <div class="metric"><div class="label">Distanza lineare</div><div id="distanceMetric" class="value">-</div></div>
+    </div>
+    <div id="restaurantList" class="restaurant-list"></div>
+  </aside>
+  <main id="map"></main>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const DATA = {"caps": ["70043"], "summary": [{"cap": "70043", "locali": 23, "distanza_lineare_km": 17.65, "primo_locale": "Ristorante Gran Pavese Contrada Capitolo 15 Monopoli 70043", "ultimo_locale": "Anima e Passione Ristorante Pizzeria Contrada Cozzana 433 Monopoli 70043"}], "restaurants": [{"id": 20, "name": "Ristorante Gran Pavese", "address": "Ristorante Gran Pavese Contrada Capitolo 15 Monopoli 70043", "phone": "tel:+39080801380", "score": "5.2 / 6", "kitchen_type": "di Frutti di mare , di Pesce , Mediterranea , Pugliese", "reviews_num": "26 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.907093,17.347973", "cap": "70043", "lat": 40.907093, "lon": 17.347973, "visit_order": 1}, {"id": 22, "name": "L'Ancora Nuova (Ristorante - Pizzeria)", "address": "L'Ancora Nuova (Ristorante - Pizzeria) Contrada Capitolo Km 6.150 Monopoli 70043", "phone": "tel:+390804116496", "score": "5.6 / 6", "kitchen_type": "Pizza , Italiana , di Pesce , Pugliese", "reviews_num": "9 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.907498,17.347632", "cap": "70043", "lat": 40.907498, "lon": 17.347632, "visit_order": 2}, {"id": 19, "name": "Cala Diavolo", "address": "Cala Diavolo Contrada Santo Stefano 151 Monopoli 70043", "phone": "tel:+390803520605", "score": "5.1 / 6", "kitchen_type": "di Pesce , Giapponese , di Frutti di mare , Pugliese", "reviews_num": "10 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.930178,17.326965", "cap": "70043", "lat": 40.930178, "lon": 17.326965, "visit_order": 3}, {"id": 18, "name": "Cala Vè", "address": "Cala Vè Via Procaccia Monopoli 70043", "phone": "tel:+393281744284", "score": "5.5 / 6", "kitchen_type": "di Pesce , di Frutti di mare , Pugliese", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.94399180000001,17.3113431", "cap": "70043", "lat": 40.94399180000001, "lon": 17.3113431, "visit_order": 4}, {"id": 17, "name": "Glevum Birreria", "address": "Glevum Birreria Via Lepanto 107 Monopoli 70043", "phone": "tel:+393920600786", "score": "5.8 / 6", "kitchen_type": "Americana , Hamburger , Steak", "reviews_num": "5 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.94393129999999,17.3050709", "cap": "70043", "lat": 40.94393129999999, "lon": 17.3050709, "visit_order": 5}, {"id": 3, "name": "Antica Posta", "address": "Antica Posta Via Mulini 38 Monopoli 70043", "phone": "tel:+390802102415", "score": "5.0 / 6", "kitchen_type": "Italiana , Enoteca", "reviews_num": "17 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95045169999999,17.3034216", "cap": "70043", "lat": 40.95045169999999, "lon": 17.3034216, "visit_order": 6}, {"id": 12, "name": "Il Cantinale", "address": "Il Cantinale Via Argento 31-33 Monopoli 70043", "phone": "tel:+393516685936", "score": "5.2 / 6", "kitchen_type": "Italiana , Pugliese", "reviews_num": "6 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.9509976,17.3046705", "cap": "70043", "lat": 40.9509976, "lon": 17.3046705, "visit_order": 7}, {"id": 1, "name": "CarloQuinto", "address": "CarloQuinto Via Santa Maria 52 Monopoli 70043", "phone": "tel:+390804033110", "score": "5.2 / 6", "kitchen_type": "di Pesce , di Frutti di mare , di Pasta , Pugliese", "reviews_num": "52 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.9532201,17.3062614", "cap": "70043", "lat": 40.9532201, "lon": 17.3062614, "visit_order": 8}, {"id": 2, "name": "Sottocoperta", "address": "Sottocoperta Via Orazio Comes 6 Monopoli 70043", "phone": "tel:+390803216995", "score": "5.4 / 6", "kitchen_type": "Italiana , Pizza , Fish & Chips , Mediterranea", "reviews_num": "22 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95286,17.304488", "cap": "70043", "lat": 40.95286, "lon": 17.304488, "visit_order": 9}, {"id": 15, "name": "La locanda dei pescatori", "address": "La locanda dei pescatori Via Porto 17 Monopoli 70043", "phone": "tel:+390809142359", "score": "4.3 / 6", "kitchen_type": "Italiana , Enoteca", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9528509,17.3039269", "cap": "70043", "lat": 40.9528509, "lon": 17.3039269, "visit_order": 10}, {"id": 7, "name": "Pinsotti", "address": "Pinsotti Via San Caterina 9 Monopoli 70043", "phone": "tel:+390805247017", "score": "6 / 6", "kitchen_type": "Italiana , Pizza , Enoteca", "reviews_num": "4 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95266,17.303196", "cap": "70043", "lat": 40.95266, "lon": 17.303196, "visit_order": 11}, {"id": 5, "name": "Ostinati - Nati per fare gli Osti", "address": "Ostinati - Nati per fare gli Osti Via San Angelo 25 Monopoli 70043", "phone": "tel:+393347685762", "score": "5.6 / 6", "kitchen_type": "Italiana", "reviews_num": "9 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.952392,17.302731", "cap": "70043", "lat": 40.952392, "lon": 17.302731, "visit_order": 12}, {"id": 4, "name": "Garibaldi Steakhouse Monopoli", "address": "Garibaldi Steakhouse Monopoli Via Giuseppe Garibaldi 70 Monopoli 70043", "phone": "tel:+390804046007", "score": "4.6 / 6", "kitchen_type": "Steak , Hamburger , BBQ , Pugliese", "reviews_num": "16 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.952834,17.303194", "cap": "70043", "lat": 40.952834, "lon": 17.303194, "visit_order": 13}, {"id": 13, "name": "Ristorante Indelli Mare Mosso", "address": "Ristorante Indelli Mare Mosso Largo Giuseppe Garibaldi 27 Monopoli 70043", "phone": "tel:+390808175467", "score": "5.0 / 6", "kitchen_type": "Italiana , di Frutti di mare , di Pesce , Mediterranea", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.953324,17.303071", "cap": "70043", "lat": 40.953324, "lon": 17.303071, "visit_order": 14}, {"id": 14, "name": "Al Maré", "address": "Al Maré Via Cristoforo Colombo 16 Monopoli 70043", "phone": "tel:+390809142142", "score": "4.0 / 6", "kitchen_type": "di Frutti di mare , Pizza , di Pesce , Pugliese", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.95413159999999,17.302915", "cap": "70043", "lat": 40.95413159999999, "lon": 17.302915, "visit_order": 15}, {"id": 9, "name": "Metae - Ristorante Monopoli", "address": "Metae - Ristorante Monopoli Via dell'Erba 63 Monopoli 70043", "phone": "tel:+390808697060", "score": "5.7 / 6", "kitchen_type": "Italiana , di Frutti di mare , di Pesce , Gourmet", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9532578,17.3013169", "cap": "70043", "lat": 40.9532578, "lon": 17.3013169, "visit_order": 16}, {"id": 8, "name": "Vinarius by Mare Mosso", "address": "Vinarius by Mare Mosso Via Cala Fontanella 14 Monopoli 70043", "phone": "tel:+390804136388", "score": "5.5 / 6", "kitchen_type": "Italiana , Steak", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.95417015851788,17.30000211286561", "cap": "70043", "lat": 40.95417015851788, "lon": 17.30000211286561, "visit_order": 17}, {"id": 6, "name": "Ottanta Secondi", "address": "Ottanta Secondi Via Marsala 72 Monopoli 70043", "phone": "tel:+390808835281", "score": "5.8 / 6", "kitchen_type": "Pizza , Steak , Pugliese , Enoteca", "reviews_num": "4 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95063200000001,17.29712199999999", "cap": "70043", "lat": 40.95063200000001, "lon": 17.29712199999999, "visit_order": 18}, {"id": 10, "name": "Bar Biancoverde | Coffee & pizza", "address": "Bar Biancoverde | Coffee & pizza Via Vittorio Veneto 141 Monopoli 70043", "phone": "tel:+39080802309", "score": "", "kitchen_type": "Pizza , Italiana", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9568137,17.2905586", "cap": "70043", "lat": 40.9568137, "lon": 17.2905586, "visit_order": 19}, {"id": 11, "name": "La Rosa dei Venti", "address": "La Rosa dei Venti Via Ippolito Nievo 6 Monopoli 70043", "phone": "tel:+390809301304", "score": "", "kitchen_type": "Italiana , di Frutti di mare , Pizza , di Pesce", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.959731,17.290308", "cap": "70043", "lat": 40.959731, "lon": 17.290308, "visit_order": 20}, {"id": 16, "name": "Le Cucine di Masseria Spina", "address": "Le Cucine di Masseria Spina Viale Aldo Moro 27 Monopoli 70043", "phone": "tel:+393248769569", "score": "5.5 / 6", "kitchen_type": "Pugliese , Italiana , di Pesce , Mediterranea", "reviews_num": "11 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.964281,17.269236", "cap": "70043", "lat": 40.964281, "lon": 17.269236, "visit_order": 21}, {"id": 21, "name": "Il Mosaico Ristorante Pizzeria Di Zaccaria Nicola", "address": "Il Mosaico Ristorante Pizzeria Di Zaccaria Nicola Contrada Sant'Oceano 138 Monopoli 70043", "phone": "tel:+390804237135", "score": "4.8 / 6", "kitchen_type": "Pizza , di Frutti di mare , Mediterranea , Pugliese", "reviews_num": "8 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.936793,17.212563", "cap": "70043", "lat": 40.936793, "lon": 17.212563, "visit_order": 22}, {"id": 23, "name": "Anima e Passione Ristorante Pizzeria", "address": "Anima e Passione Ristorante Pizzeria Contrada Cozzana 433 Monopoli 70043", "phone": "tel:+393283718239", "score": "5.6 / 6", "kitchen_type": "Italiana , Pizza , Enoteca", "reviews_num": "5 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.93023542370819,17.20765076158107", "cap": "70043", "lat": 40.93023542370819, "lon": 17.20765076158107, "visit_order": 23}], "groups": {"70043": [{"id": 20, "name": "Ristorante Gran Pavese", "address": "Ristorante Gran Pavese Contrada Capitolo 15 Monopoli 70043", "phone": "tel:+39080801380", "score": "5.2 / 6", "kitchen_type": "di Frutti di mare , di Pesce , Mediterranea , Pugliese", "reviews_num": "26 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.907093,17.347973", "cap": "70043", "lat": 40.907093, "lon": 17.347973, "visit_order": 1}, {"id": 22, "name": "L'Ancora Nuova (Ristorante - Pizzeria)", "address": "L'Ancora Nuova (Ristorante - Pizzeria) Contrada Capitolo Km 6.150 Monopoli 70043", "phone": "tel:+390804116496", "score": "5.6 / 6", "kitchen_type": "Pizza , Italiana , di Pesce , Pugliese", "reviews_num": "9 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.907498,17.347632", "cap": "70043", "lat": 40.907498, "lon": 17.347632, "visit_order": 2}, {"id": 19, "name": "Cala Diavolo", "address": "Cala Diavolo Contrada Santo Stefano 151 Monopoli 70043", "phone": "tel:+390803520605", "score": "5.1 / 6", "kitchen_type": "di Pesce , Giapponese , di Frutti di mare , Pugliese", "reviews_num": "10 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.930178,17.326965", "cap": "70043", "lat": 40.930178, "lon": 17.326965, "visit_order": 3}, {"id": 18, "name": "Cala Vè", "address": "Cala Vè Via Procaccia Monopoli 70043", "phone": "tel:+393281744284", "score": "5.5 / 6", "kitchen_type": "di Pesce , di Frutti di mare , Pugliese", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.94399180000001,17.3113431", "cap": "70043", "lat": 40.94399180000001, "lon": 17.3113431, "visit_order": 4}, {"id": 17, "name": "Glevum Birreria", "address": "Glevum Birreria Via Lepanto 107 Monopoli 70043", "phone": "tel:+393920600786", "score": "5.8 / 6", "kitchen_type": "Americana , Hamburger , Steak", "reviews_num": "5 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.94393129999999,17.3050709", "cap": "70043", "lat": 40.94393129999999, "lon": 17.3050709, "visit_order": 5}, {"id": 3, "name": "Antica Posta", "address": "Antica Posta Via Mulini 38 Monopoli 70043", "phone": "tel:+390802102415", "score": "5.0 / 6", "kitchen_type": "Italiana , Enoteca", "reviews_num": "17 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95045169999999,17.3034216", "cap": "70043", "lat": 40.95045169999999, "lon": 17.3034216, "visit_order": 6}, {"id": 12, "name": "Il Cantinale", "address": "Il Cantinale Via Argento 31-33 Monopoli 70043", "phone": "tel:+393516685936", "score": "5.2 / 6", "kitchen_type": "Italiana , Pugliese", "reviews_num": "6 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.9509976,17.3046705", "cap": "70043", "lat": 40.9509976, "lon": 17.3046705, "visit_order": 7}, {"id": 1, "name": "CarloQuinto", "address": "CarloQuinto Via Santa Maria 52 Monopoli 70043", "phone": "tel:+390804033110", "score": "5.2 / 6", "kitchen_type": "di Pesce , di Frutti di mare , di Pasta , Pugliese", "reviews_num": "52 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.9532201,17.3062614", "cap": "70043", "lat": 40.9532201, "lon": 17.3062614, "visit_order": 8}, {"id": 2, "name": "Sottocoperta", "address": "Sottocoperta Via Orazio Comes 6 Monopoli 70043", "phone": "tel:+390803216995", "score": "5.4 / 6", "kitchen_type": "Italiana , Pizza , Fish & Chips , Mediterranea", "reviews_num": "22 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95286,17.304488", "cap": "70043", "lat": 40.95286, "lon": 17.304488, "visit_order": 9}, {"id": 15, "name": "La locanda dei pescatori", "address": "La locanda dei pescatori Via Porto 17 Monopoli 70043", "phone": "tel:+390809142359", "score": "4.3 / 6", "kitchen_type": "Italiana , Enoteca", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9528509,17.3039269", "cap": "70043", "lat": 40.9528509, "lon": 17.3039269, "visit_order": 10}, {"id": 7, "name": "Pinsotti", "address": "Pinsotti Via San Caterina 9 Monopoli 70043", "phone": "tel:+390805247017", "score": "6 / 6", "kitchen_type": "Italiana , Pizza , Enoteca", "reviews_num": "4 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95266,17.303196", "cap": "70043", "lat": 40.95266, "lon": 17.303196, "visit_order": 11}, {"id": 5, "name": "Ostinati - Nati per fare gli Osti", "address": "Ostinati - Nati per fare gli Osti Via San Angelo 25 Monopoli 70043", "phone": "tel:+393347685762", "score": "5.6 / 6", "kitchen_type": "Italiana", "reviews_num": "9 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.952392,17.302731", "cap": "70043", "lat": 40.952392, "lon": 17.302731, "visit_order": 12}, {"id": 4, "name": "Garibaldi Steakhouse Monopoli", "address": "Garibaldi Steakhouse Monopoli Via Giuseppe Garibaldi 70 Monopoli 70043", "phone": "tel:+390804046007", "score": "4.6 / 6", "kitchen_type": "Steak , Hamburger , BBQ , Pugliese", "reviews_num": "16 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.952834,17.303194", "cap": "70043", "lat": 40.952834, "lon": 17.303194, "visit_order": 13}, {"id": 13, "name": "Ristorante Indelli Mare Mosso", "address": "Ristorante Indelli Mare Mosso Largo Giuseppe Garibaldi 27 Monopoli 70043", "phone": "tel:+390808175467", "score": "5.0 / 6", "kitchen_type": "Italiana , di Frutti di mare , di Pesce , Mediterranea", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.953324,17.303071", "cap": "70043", "lat": 40.953324, "lon": 17.303071, "visit_order": 14}, {"id": 14, "name": "Al Maré", "address": "Al Maré Via Cristoforo Colombo 16 Monopoli 70043", "phone": "tel:+390809142142", "score": "4.0 / 6", "kitchen_type": "di Frutti di mare , Pizza , di Pesce , Pugliese", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.95413159999999,17.302915", "cap": "70043", "lat": 40.95413159999999, "lon": 17.302915, "visit_order": 15}, {"id": 9, "name": "Metae - Ristorante Monopoli", "address": "Metae - Ristorante Monopoli Via dell'Erba 63 Monopoli 70043", "phone": "tel:+390808697060", "score": "5.7 / 6", "kitchen_type": "Italiana , di Frutti di mare , di Pesce , Gourmet", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9532578,17.3013169", "cap": "70043", "lat": 40.9532578, "lon": 17.3013169, "visit_order": 16}, {"id": 8, "name": "Vinarius by Mare Mosso", "address": "Vinarius by Mare Mosso Via Cala Fontanella 14 Monopoli 70043", "phone": "tel:+390804136388", "score": "5.5 / 6", "kitchen_type": "Italiana , Steak", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.95417015851788,17.30000211286561", "cap": "70043", "lat": 40.95417015851788, "lon": 17.30000211286561, "visit_order": 17}, {"id": 6, "name": "Ottanta Secondi", "address": "Ottanta Secondi Via Marsala 72 Monopoli 70043", "phone": "tel:+390808835281", "score": "5.8 / 6", "kitchen_type": "Pizza , Steak , Pugliese , Enoteca", "reviews_num": "4 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.95063200000001,17.29712199999999", "cap": "70043", "lat": 40.95063200000001, "lon": 17.29712199999999, "visit_order": 18}, {"id": 10, "name": "Bar Biancoverde | Coffee & pizza", "address": "Bar Biancoverde | Coffee & pizza Via Vittorio Veneto 141 Monopoli 70043", "phone": "tel:+39080802309", "score": "", "kitchen_type": "Pizza , Italiana", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.9568137,17.2905586", "cap": "70043", "lat": 40.9568137, "lon": 17.2905586, "visit_order": 19}, {"id": 11, "name": "La Rosa dei Venti", "address": "La Rosa dei Venti Via Ippolito Nievo 6 Monopoli 70043", "phone": "tel:+390809301304", "score": "", "kitchen_type": "Italiana , di Frutti di mare , Pizza , di Pesce", "reviews_num": "", "google_map_url": "https://www.google.com/maps/dir//40.959731,17.290308", "cap": "70043", "lat": 40.959731, "lon": 17.290308, "visit_order": 20}, {"id": 16, "name": "Le Cucine di Masseria Spina", "address": "Le Cucine di Masseria Spina Viale Aldo Moro 27 Monopoli 70043", "phone": "tel:+393248769569", "score": "5.5 / 6", "kitchen_type": "Pugliese , Italiana , di Pesce , Mediterranea", "reviews_num": "11 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.964281,17.269236", "cap": "70043", "lat": 40.964281, "lon": 17.269236, "visit_order": 21}, {"id": 21, "name": "Il Mosaico Ristorante Pizzeria Di Zaccaria Nicola", "address": "Il Mosaico Ristorante Pizzeria Di Zaccaria Nicola Contrada Sant'Oceano 138 Monopoli 70043", "phone": "tel:+390804237135", "score": "4.8 / 6", "kitchen_type": "Pizza , di Frutti di mare , Mediterranea , Pugliese", "reviews_num": "8 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.936793,17.212563", "cap": "70043", "lat": 40.936793, "lon": 17.212563, "visit_order": 22}, {"id": 23, "name": "Anima e Passione Ristorante Pizzeria", "address": "Anima e Passione Ristorante Pizzeria Contrada Cozzana 433 Monopoli 70043", "phone": "tel:+393283718239", "score": "5.6 / 6", "kitchen_type": "Italiana , Pizza , Enoteca", "reviews_num": "5 recensioni", "google_map_url": "https://www.google.com/maps/dir//40.93023542370819,17.20765076158107", "cap": "70043", "lat": 40.93023542370819, "lon": 17.20765076158107, "visit_order": 23}]}};
+let map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+let markerLayer = L.layerGroup().addTo(map);
+let fallbackLayer = null;
+let routeLayer = null;
+let markerRefs = new Map();
+
+const capSelect = document.getElementById('capSelect');
+const searchInput = document.getElementById('searchInput');
+const restaurantList = document.getElementById('restaurantList');
+const statusBox = document.getElementById('status');
+const countMetric = document.getElementById('countMetric');
+const distanceMetric = document.getElementById('distanceMetric');
+
+DATA.caps.forEach(cap => {
+  const opt = document.createElement('option');
+  opt.value = cap;
+  const count = DATA.groups[cap].length;
+  opt.textContent = `${cap} — ${count} locali`;
+  capSelect.appendChild(opt);
+});
+capSelect.value = '70043';
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function telHref(phone) {
+  return String(phone || '').replace(/^tel:/, 'tel:');
+}
+function numberedIcon(n) {
+  return L.divIcon({
+    className: '',
+    html: `<div class="marker-label">${n}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+}
+function popupHtml(r) {
+  const phone = r.phone || '';
+  const reviews = r.reviews_num || 'n/d';
+  const score = r.score || 'n/d';
+  const kitchen = r.kitchen_type || 'n/d';
+  const phoneButton = phone ? `<a class="secondary" href="${telHref(phone)}">Chiama</a>` : '';
+  return `<div class="popup">
+    <h3>#${r.visit_order} · ${esc(r.name || r.address)}</h3>
+    <div class="popup-row"><div class="popup-label">Indirizzo</div><div class="popup-value">${esc(r.address)}</div></div>
+    <div class="popup-row"><div class="popup-label">Telefono</div><div class="popup-value">${esc(phone || 'n/d')}</div></div>
+    <div class="popup-row"><div class="popup-label">Score</div><div class="popup-value">${esc(score)} · ${esc(reviews)}</div></div>
+    <div class="popup-row"><div class="popup-label">Cucina</div><div class="popup-value">${esc(kitchen)}</div></div>
+    <div class="popup-row"><div class="popup-label">Coordinate</div><div class="popup-value">${Number(r.lat).toFixed(6)}, ${Number(r.lon).toFixed(6)}</div></div>
+    <div class="popup-actions"><a href="${esc(r.google_map_url)}" target="_blank" rel="noopener">Google Maps</a>${phoneButton}</div>
+  </div>`;
+}
+function haversine(a, b) {
+  const R = 6371.0088;
+  const toRad = deg => deg * Math.PI / 180;
+  const lat1 = toRad(a.lat), lon1 = toRad(a.lon), lat2 = toRad(b.lat), lon2 = toRad(b.lon);
+  const dlat = lat2-lat1, dlon = lon2-lon1;
+  const h = Math.sin(dlat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function pathDistance(points) {
+  let total = 0;
+  for (let i=0; i<points.length-1; i++) total += haversine(points[i], points[i+1]);
+  return total;
+}
+function renderList(points, query='') {
+  restaurantList.innerHTML = '';
+  const q = query.trim().toLowerCase();
+  points.filter(r => !q || [r.address, r.kitchen_type, r.phone, r.score, r.reviews_num].join(' ').toLowerCase().includes(q)).forEach(r => {
+    const card = document.createElement('div');
+    card.className = 'restaurant-card';
+    card.innerHTML = `<div class="restaurant-title">#${r.visit_order} · ${esc(r.address)}</div>
+      <div class="restaurant-meta">${esc(r.kitchen_type || 'Cucina n/d')}<br>Score: ${esc(r.score || 'n/d')} · Recensioni: ${esc(r.reviews_num || 'n/d')}</div>`;
+    card.addEventListener('click', () => {
+      const marker = markerRefs.get(r.id);
+      if (marker) { map.setView([r.lat, r.lon], 17); marker.openPopup(); }
+    });
+    restaurantList.appendChild(card);
+  });
+}
+function clearRoutes() {
+  markerLayer.clearLayers();
+  markerRefs.clear();
+  if (fallbackLayer) { map.removeLayer(fallbackLayer); fallbackLayer = null; }
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+}
+async function drawCap(cap) {
+  clearRoutes();
+  const points = DATA.groups[cap] || [];
+  const bounds = [];
+  points.forEach(r => {
+    const marker = L.marker([r.lat, r.lon], { icon: numberedIcon(r.visit_order) }).addTo(markerLayer);
+    marker.bindPopup(popupHtml(r), { maxWidth: 320 });
+    markerRefs.set(r.id, marker);
+    bounds.push([r.lat, r.lon]);
+  });
+  if (bounds.length) map.fitBounds(bounds, { padding: [32, 32] });
+  const latlngs = points.map(r => [r.lat, r.lon]);
+  fallbackLayer = L.polyline(latlngs, { color: '#94a3b8', weight: 3, opacity: 0.85, dashArray: '6,6' }).addTo(map);
+  const kmLinear = pathDistance(points);
+  countMetric.textContent = points.length;
+  distanceMetric.textContent = `${kmLinear.toFixed(2)} km`;
+  renderList(points, searchInput.value);
+  if (points.length < 2) {
+    statusBox.textContent = `CAP ${cap}: un solo locale, nessun percorso da calcolare.`;
+    return;
+  }
+  statusBox.textContent = `CAP ${cap}: richiesta percorso pedonale reale online...`;
+  const coordStr = points.map(r => `${r.lon},${r.lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/foot/${coordStr}?overview=full&geometries=geojson&steps=false`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!data.routes || !data.routes.length) throw new Error('Nessuna rotta restituita');
+    const route = data.routes[0];
+    routeLayer = L.geoJSON(route.geometry, { style: { color: '#16a34a', weight: 5, opacity: 0.9 } }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [32, 32] });
+    const routeKm = (route.distance / 1000).toFixed(2);
+    const mins = Math.round(route.duration / 60);
+    statusBox.innerHTML = `CAP ${cap}: percorso pedonale calcolato. <strong>${routeKm} km</strong>, circa <strong>${mins} min</strong>.`;
+  } catch (err) {
+    statusBox.innerHTML = `CAP ${cap}: routing online non disponibile ora. Mostro la linea indicativa ottimizzata: <strong>${kmLinear.toFixed(2)} km</strong> in linea retta.`;
+  }
+}
+capSelect.addEventListener('change', () => drawCap(capSelect.value));
+searchInput.addEventListener('input', () => renderList(DATA.groups[capSelect.value] || [], searchInput.value));
+drawCap(capSelect.value);
+</script>
+</body>
+</html>
