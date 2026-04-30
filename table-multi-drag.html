@@ -1,0 +1,1294 @@
+<html>
+<head>
+<title>Demo Sala con 3 prenotazioni su un tavolo</title>
+</head>
+<body>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  /* Stili Generali */
+  body.body-background {
+      background-color: #f7f7f7;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: #333;
+  }
+
+  .navbar {
+      background-color: #fff;
+      border-bottom: 1px solid #ccc;
+      padding: 10px 20px;
+  }
+
+  .navbar-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: bold;
+  }
+
+  .container {
+      padding: 20px;
+  }
+
+  .top-bar {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+  }
+
+  .room-selection {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+  }
+
+  .label-select-room {
+      font-weight: bold;
+  }
+
+  .select-room {
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+  }
+
+  .mode-buttons .btn {
+      margin-left: 10px;
+  }
+
+  .btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #fff;
+      font-weight: bold;
+  }
+
+  .btn-view {
+      background-color: #3b82f6;
+  }
+
+  .btn-view:hover {
+      background-color: #2563eb;
+  }
+
+  .btn-edit {
+      background-color: #10b981;
+  }
+
+  .btn-edit:hover {
+      background-color: #059669;
+  }
+
+  .room-info {
+      margin-bottom: 20px;
+  }
+
+  .room-name {
+      margin: 0 0 5px;
+      font-size: 24px;
+      font-weight: bold;
+  }
+
+  .room-details {
+      margin: 0;
+      font-size: 14px;
+      color: #666;
+  }
+
+  .room-layout {
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+      overflow: auto;
+      background: #eee;
+      border-radius: 0.75rem;
+      border: 1px solid #053ca8;
+      margin-bottom: 1rem;
+  }
+
+  .room-layout-grid {
+      background-size: 20px 20px;
+  }
+
+  .room-inner {
+      position: relative;
+      margin: 1rem;
+      min-height: 400px;
+  }
+
+  /* Tavoli */
+  .table-item {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      user-select: none;
+      touch-action: none;
+      border: 2px solid #3e4552;
+      background: #99c08c;
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s ease, background-color 0.2s ease;
+      box-sizing: border-box;
+      overflow: visible; /* permette alla lista prenotazioni di uscire dal tavolo */
+  }
+
+  .table-square {
+      width: 64px;
+      height: 64px;
+      border-radius: 0.5rem;
+  }
+
+  .table-rectangle {
+      width: 80px;
+      height: 64px;
+      border-radius: 0.5rem;
+  }
+
+  .table-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 9999px;
+  }
+
+  .table-free {
+      background: #99c08c;
+      border-color: #3e4552;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  }
+
+  .table-occupied {
+      background: #fee2e2;
+      border-color: #b91c1c;
+  }
+
+  .table-partial {
+      background: #fef9c3;
+      border-color: #a16207;
+  }
+
+  .table-rotating {
+      cursor: grabbing;
+  }
+
+  .table-drop-hover {
+      box-shadow:
+          0 0 0 3px rgba(59,130,246,.45),
+          0 4px 12px rgba(59,130,246,.18);
+  }
+  
+  .rot-handle {
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 2px solid #3b82f6;
+      box-shadow: 0 1px 2px rgba(0,0,0,.15);
+      cursor: grab;
+      touch-action: none;
+      display: none;
+  }
+
+  .table-item:active {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+
+  /* Nuovo layout interno tavolo */
+  .table-header {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #000;
+      line-height: 1;
+      white-space: nowrap;
+      z-index: 20;          /* added */
+      pointer-events: auto; /* added */
+      cursor: pointer;      /* added */
+  }
+
+  .table-number {
+      font-size: 16px;
+      font-weight: 700;
+  }
+
+  .table-capacity {
+      font-size: 12px;
+      font-weight: 500;
+  }
+
+  .table-bookings {
+      position: absolute;
+      top: calc(18px);   /* sopra al tavolo */
+      left: 85%;                  /* parte dal centro */
+      transform: translateX(-50%);
+      min-width: max-content;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      color: #000;
+      font-size: 11px;
+      line-height: 1;
+      white-space: nowrap;
+      z-index: 10;
+  }
+
+  .table-booking-row {
+      background: rgba(255,255,255,0.9);
+      padding: 2px 3px;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 95px;
+      touch-action: none; /* needed for touch drag */
+      cursor: grab;
+  }
+
+  .table-booking-row.is-drag-origin {
+      opacity: .35;
+  }
+  
+  /* Box timeslot */
+  .box-timeslot {
+      margin-bottom: 2rem;
+  }
+  .box-timeslot-title {
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+      color: #333;
+  }
+  .box-realtime {
+      border: 2px solid #3b82f6;
+      padding: 1rem;
+      border-radius: 8px;
+      background-color: #f0f9ff;
+  }
+  .box-standard {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      border-radius: 4px;
+      background-color: #fff;
+  }
+  .table-realtime-disabled {
+      pointer-events: none;
+      cursor: not-allowed;
+      opacity: .85;
+  }
+
+
+
+  .booking-drag-preview {
+      position: fixed;
+      z-index: 70;
+      pointer-events: none;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: rgba(17,24,39,.92);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+      box-shadow: 0 6px 16px rgba(0,0,0,.22);
+      white-space: nowrap;
+  }
+
+  .booking-row-menu-open {
+      outline: 2px solid rgba(59,130,246,.35);
+  }
+
+  .booking-context-menu {
+      position: fixed;
+      z-index: 80;
+      transform: translate(-50%, -100%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 9999px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.18);
+  }
+
+  .booking-menu-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+  }
+
+  .booking-menu-btn-remove {
+      background: #fee2e2;
+      color: #b91c1c;
+  }
+
+  .booking-menu-btn-add {
+      background: #dcfce7;
+      color: #15803d;
+  }
+
+  .table-add-mode-target {
+      box-shadow:
+          0 0 0 3px rgb(243 144 55 / 57%), 
+          0 4px 12px rgb(185 171 16 / 34%);
+  }
+
+  .table-add-mode-source {
+      box-shadow:
+          0 0 0 3px rgba(245,158,11,.35),
+          0 4px 12px rgba(245,158,11,.18);
+  }
+
+  .room-floating-hint {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 75;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 9999px;
+      background: rgba(17,24,39,.96);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      font-size: 13px;
+      white-space: nowrap;
+  }
+
+  .room-floating-hint button {
+      border: none;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      border-radius: 9999px;
+      padding: 6px 10px;
+      cursor: pointer;
+  }
+</style>
+<div
+    x-data="roomBookingDnD({
+        mode: 'view',
+        tables: [
+            {
+                id: '9e20257a-4d92-4e46-b247-c9b0af08a55d',
+                number: 1,
+                min: 1,
+                max: 4,
+                x: 20,
+                y: 20,
+                shape: 'square',
+                bookings: [
+                    { id: 'b1', time: '12:30', customer: 'Serra Michele' },
+                    { id: 'b2', time: '14:30', customer: 'Nicotera Lucia' },
+                    { id: 'b3', time: '18:30', customer: 'Cucchiarini Lorella' }
+                ]
+            },
+            {
+                id: '9e2025c8-8914-4816-8953-104a9214aca9',
+                number: 11,
+                min: 1,
+                max: 4,
+                x: 160,
+                y: 20,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e2025d7-226e-4a8b-96b3-106dc538dd33',
+                number: 12,
+                min: 1,
+                max: 4,
+                x: 160,
+                y: 120,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e2025ee-3cb7-4c99-ac05-ead1d388b741',
+                number: 13,
+                min: 1,
+                max: 4,
+                x: 160,
+                y: 220,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e20258b-46b2-4f9f-a97d-f0d55fe58a4a',
+                number: 2,
+                min: 1,
+                max: 4,
+                x: 20,
+                y: 120,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e20261b-e5c4-4fbb-b990-94e5d688efd4',
+                number: 21,
+                min: 1,
+                max: 4,
+                x: 300,
+                y: 20,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e20262a-d364-4583-bc80-026122b0cb77',
+                number: 22,
+                min: 1,
+                max: 4,
+                x: 300,
+                y: 120,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e202648-c71a-4916-8e37-5e41fc176631',
+                number: 23,
+                min: 1,
+                max: 4,
+                x: 300,
+                y: 220,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e2025a8-519f-499a-a0d7-4d1296e74bac',
+                number: 3,
+                min: 1,
+                max: 4,
+                x: 20,
+                y: 220,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e202678-567f-459c-9518-9dffbe8b8387',
+                number: 31,
+                min: 1,
+                max: 4,
+                x: 440,
+                y: 20,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e202686-91a6-4463-89f2-8c597f8ec947',
+                number: 32,
+                min: 1,
+                max: 4,
+                x: 440,
+                y: 120,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e202697-4370-4bc4-a84a-499504834de9',
+                number: 33,
+                min: 1,
+                max: 4,
+                x: 440,
+                y: 220,
+                shape: 'square',
+                bookings: []
+            },
+            {
+                id: '9e202704-3bb9-41a2-9731-86c4b56c25f4',
+                number: 100,
+                min: 1,
+                max: 8,
+                x: 580,
+                y: 320,
+                shape: 'rectangle',
+                bookings: []
+            }
+        ]
+    })" 
+    
+    @keydown.escape.window="cancelInteractiveModes()"
+    class="room-layout room-layout-main"
+    style="margin-top:1rem; height: 448px; overflow-x: auto; overflow-y: hidden;"
+>
+    <div class="room-inner room-layout-grid" style="width: 692px; height: 416px;">
+			<template x-for="table in tables" :key="table.id">
+                <div
+                        :class="tableCssClasses(table)"
+                        :style="tableStyle(table)"
+                        :data-drop-table-id="table.id"
+                        @click="onTableClick(table.id, $event)"
+                >
+                        <div
+                            class="table-header"
+                            @click.stop="onTableHeaderClick(table.id)"
+                        >
+                            <strong class="table-number" x-text="table.number"></strong>
+                            <span class="table-capacity" x-text="`${table.min} - ${table.max}`"></span>
+                        </div>
+
+                        <div class="table-bookings" x-show="table.bookings.length > 0">
+                            <template x-for="booking in table.bookings" :key="`${table.id}-${booking.id}`">
+                                <div
+                                    class="table-booking-row"
+                                    @pointerdown.stop="onBookingPointerDown(table.id, booking.id, $event)"
+                                    @click.stop="onBookingRowClick(table.id, booking.id, $event)"
+                                    :class="{
+                                        'is-drag-origin': isDraggedBooking(table.id, booking.id),
+                                        'booking-row-menu-open': isBookingMenuTarget(table.id, booking.id)
+                                    }"
+                                    x-text="`${booking.time} ${booking.customer}`"
+                                ></div>
+                            </template>
+                        </div>
+                </div>
+			</template>
+    </div>
+
+    <!-- drag preview -->
+    <div
+        x-show="dragPreview.visible"
+        class="booking-drag-preview"
+        style="display:none;"
+        :style="`left:${dragPreview.x}px; top:${dragPreview.y}px;`"
+        x-text="dragPreview.label"
+    ></div>
+
+		<!-- context menu booking -->
+		<div
+				x-show="bookingMenu.open"
+				x-transition
+				class="booking-context-menu"
+				style="display:none;"
+				:style="`left:${bookingMenu.x}px; top:${bookingMenu.y}px;`"
+				@click.outside="closeBookingMenu()"
+				@pointerdown.stop
+		>
+				<button
+				    type="button"
+				    class="booking-menu-btn booking-menu-btn-remove"
+				    title="Rimuovi assegnazione dal tavolo"
+				    @click.stop="detachBookingFromMenu()"
+				>
+				    ✕
+				</button>
+
+				<button
+				    type="button"
+				    class="booking-menu-btn booking-menu-btn-add"
+				    title="Assegna anche ad altri tavoli"
+				    @click.stop="beginAddTableMode()"
+				>
+				    +
+				</button>
+		</div>
+
+		<!-- add-table mode hint -->
+		<div
+				x-show="addTableMode.active"
+				x-transition
+				class="room-floating-hint"
+				style="display:none;"
+		>
+				<span x-text="`Seleziona un altro tavolo per ${addTableMode.label}`"></span>
+				<button type="button" @click="cancelAddTableMode()">Annulla</button>
+		</div>
+
+
+    <!-- keep your existing modal markup unchanged -->
+    <div
+        x-show="isTableModalOpen"
+        x-transition.opacity
+        @keydown.escape.window="closeTableModal()"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        style="display: none;"
+    >
+        <div
+            class="absolute inset-0 bg-black/50"
+            @click="closeTableModal()"
+        ></div>
+
+        <div
+            x-show="isTableModalOpen"
+            x-transition
+            @click.stop
+            class="relative z-10 w-full max-w-md rounded-xl bg-white shadow-2xl p-6"
+        >
+            <div class="flex items-start justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-900">
+                    Table details
+                </h2>
+
+                <button
+                    type="button"
+                    @click="closeTableModal()"
+                    class="rounded px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                >
+                    ✕
+                </button>
+            </div>
+
+            <template x-if="selectedTable">
+                <div class="space-y-3">
+                    <div>
+                        <div class="text-sm text-gray-500">Table number</div>
+                        <div class="text-lg font-semibold" x-text="selectedTable.number"></div>
+                    </div>
+
+                    <div>
+                        <div class="text-sm text-gray-500">Capacity</div>
+                        <div class="text-base" x-text="`${selectedTable.min} - ${selectedTable.max} persons`"></div>
+                    </div>
+
+                    <div>
+                        <div class="text-sm text-gray-500">Bookings count</div>
+                        <div class="text-base" x-text="selectedTable.bookings?.length ?? 0"></div>
+                    </div>
+
+                    <template x-if="selectedTable.bookings && selectedTable.bookings.length">
+                        <div>
+                            <div class="text-sm text-gray-500 mb-2">Bookings</div>
+
+                            <div class="space-y-2">
+                                <template x-for="booking in selectedTable.bookings" :key="booking.id">
+                                    <div class="rounded-md border border-gray-200 px-3 py-2 text-sm">
+                                        <span class="font-medium" x-text="booking.time"></span>
+                                        <span x-text="` ${booking.customer}`"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+    function roomBookingDnD(config = {}) {
+        return {
+            mode: config.mode ?? 'view',
+            tables: config.tables ?? [],
+    
+            longPressDelay: 450,
+            dragThreshold: 8,
+    
+            dragging: null,
+            hoverTableId: null,
+            suppressClicksUntil: 0,
+    
+            isTableModalOpen: false,
+            selectedTable: null,
+    
+            pointerSession: null,
+            pointerListeners: null,
+    
+            bookingMenu: {
+                open: false,
+                tableId: null,
+                bookingId: null,
+                x: 0,
+                y: 0,
+                label: '',
+            },
+    
+            addTableMode: {
+                active: false,
+                bookingId: null,
+                fromTableId: null,
+                label: '',
+            },
+    
+            dragPreview: {
+                visible: false,
+                x: 0,
+                y: 0,
+                label: '',
+            },
+    
+            openTableModal(tableId) {
+                console.log("ENTRATO MODAL TAVOLO " + tableId);
+    
+                const table = this.tables.find(t => t.id === tableId);
+                if (!table) return;
+    
+                this.selectedTable = JSON.parse(JSON.stringify(table));
+                this.isTableModalOpen = true;
+                document.body.classList.add('overflow-hidden');
+            },
+    
+            closeTableModal() {
+                this.isTableModalOpen = false;
+                this.selectedTable = null;
+                document.body.classList.remove('overflow-hidden');
+            },
+    
+            refreshSelectedTable() {
+                if (!this.isTableModalOpen || !this.selectedTable?.id) return;
+    
+                const table = this.tables.find(t => t.id === this.selectedTable.id);
+                if (!table) return;
+    
+                this.selectedTable = JSON.parse(JSON.stringify(table));
+            },
+    
+            shouldIgnoreClick() {
+                return Date.now() < this.suppressClicksUntil;
+            },
+    
+            cancelInteractiveModes() {
+                this.closeBookingMenu();
+                this.cancelAddTableMode();
+            },
+    
+            closeBookingMenu() {
+                this.bookingMenu = {
+                    open: false,
+                    tableId: null,
+                    bookingId: null,
+                    x: 0,
+                    y: 0,
+                    label: '',
+                };
+            },
+    
+            openBookingMenu(tableId, bookingId, rowEl) {
+                const table = this.tables.find(t => t.id === tableId);
+                const booking = table?.bookings.find(b => b.id === bookingId);
+                if (!booking || !rowEl) return;
+    
+                const rect = rowEl.getBoundingClientRect();
+    
+                this.bookingMenu = {
+                    open: true,
+                    tableId,
+                    bookingId,
+                    x: Math.round(rect.left + (rect.width / 2)),
+                    y: Math.round(rect.top - 8),
+                    label: `${booking.time} ${booking.customer}`,
+                };
+    
+                this.dragging = null;
+                this.hoverTableId = null;
+                this.dragPreview.visible = false;
+                this.suppressClicksUntil = Date.now() + 350;
+            },
+    
+            isBookingMenuTarget(tableId, bookingId) {
+                return this.bookingMenu.open
+                    && this.bookingMenu.tableId === tableId
+                    && this.bookingMenu.bookingId === bookingId;
+            },
+    
+            beginAddTableMode() {
+                if (!this.bookingMenu.open) return;
+    
+                this.addTableMode = {
+                    active: true,
+                    bookingId: this.bookingMenu.bookingId,
+                    fromTableId: this.bookingMenu.tableId,
+                    label: this.bookingMenu.label,
+                };
+    
+                console.log('START ADD TABLE MODE', {
+                    bookingId: this.addTableMode.bookingId,
+                    fromTableId: this.addTableMode.fromTableId,
+                });
+    
+                this.closeBookingMenu();
+                this.suppressClicksUntil = Date.now() + 250;
+            },
+    
+            cancelAddTableMode() {
+                this.addTableMode = {
+                    active: false,
+                    bookingId: null,
+                    fromTableId: null,
+                    label: '',
+                };
+            },
+    
+            onBookingRowClick(tableId, bookingId, event) {
+                if (this.shouldIgnoreClick()) return;
+                if (this.addTableMode.active) return;
+                if (this.bookingMenu.open) return;
+    
+                const table = this.tables.find(t => t.id === tableId);
+                const booking = table?.bookings.find(b => b.id === bookingId);
+    
+                if (!booking) return;
+    
+                console.log('Booking clicked', { tableId, bookingId, booking });
+    
+                if (this.$wire && typeof this.$wire.openBooking === 'function') {
+                    this.$wire.openBooking(bookingId);
+                }
+            },
+    
+            onTableHeaderClick(tableId) {
+                if (this.addTableMode.active) {
+                    this.onTableClick(tableId);
+                    return;
+                }
+    
+                if (this.shouldIgnoreClick()) return;
+                this.openTableModal(tableId);
+            },
+    
+            onTableClick(tableId) {
+                if (!this.addTableMode.active) return;
+    
+                this.commitBookingAttach(
+                    this.addTableMode.bookingId,
+                    this.addTableMode.fromTableId,
+                    tableId
+                );
+            },
+    
+            onBookingPointerDown(fromTableId, bookingId, event) {
+                if (this.mode === 'edit') return;
+                if (!event.isPrimary) return;
+                if (this.addTableMode.active) return;
+    
+                const table = this.tables.find(t => t.id === fromTableId);
+                const booking = table?.bookings.find(b => b.id === bookingId);
+    
+                if (!booking) return;
+    
+                this.closeBookingMenu();
+    
+                const rowEl = event.currentTarget;
+    
+                this.pointerSession = {
+                    pointerId: event.pointerId,
+                    fromTableId,
+                    bookingId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                    dragStarted: false,
+                    menuOpened: false,
+                    rowEl,
+                    label: `${booking.time} ${booking.customer}`,
+                    longPressTimer: window.setTimeout(() => {
+                        if (!this.pointerSession) return;
+                        if (this.pointerSession.pointerId !== event.pointerId) return;
+                        if (this.pointerSession.dragStarted) return;
+    
+                        this.pointerSession.menuOpened = true;
+                        this.openBookingMenu(fromTableId, bookingId, rowEl);
+                    }, this.longPressDelay),
+                };
+    
+                if (rowEl.setPointerCapture) {
+                    rowEl.setPointerCapture(event.pointerId);
+                }
+    
+                const move = (ev) => this.onGlobalPointerMove(ev);
+                const up = (ev) => this.onGlobalPointerUp(ev);
+                const cancel = (ev) => this.onGlobalPointerCancel(ev);
+    
+                this.pointerListeners = { move, up, cancel };
+    
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+                window.addEventListener('pointercancel', cancel);
+            },
+    
+            onGlobalPointerMove(event) {
+                if (!this.pointerSession) return;
+                if (event.pointerId !== this.pointerSession.pointerId) return;
+    
+                const session = this.pointerSession;
+                session.lastX = event.clientX;
+                session.lastY = event.clientY;
+    
+                if (session.menuOpened) {
+                    return;
+                }
+    
+                const dx = event.clientX - session.startX;
+                const dy = event.clientY - session.startY;
+                const distance = Math.hypot(dx, dy);
+    
+                if (!session.dragStarted && distance < this.dragThreshold) {
+                    return;
+                }
+    
+                this.clearLongPressTimer(session);
+    
+                if (!session.dragStarted) {
+                    session.dragStarted = true;
+    
+                    this.dragging = {
+                        bookingId: session.bookingId,
+                        fromTableId: session.fromTableId,
+                    };
+    
+                    this.suppressClicksUntil = Date.now() + 250;
+                    this.closeBookingMenu();
+                    this.cancelAddTableMode();
+                }
+    
+                event.preventDefault();
+    
+                this.dragPreview.visible = true;
+                this.dragPreview.x = event.clientX + 14;
+                this.dragPreview.y = event.clientY + 14;
+                this.dragPreview.label = session.label;
+    
+                this.hoverTableId = this.findDropTableIdAtPoint(event.clientX, event.clientY);
+            },
+    
+            async onGlobalPointerUp(event) {
+                if (!this.pointerSession) return;
+                if (event.pointerId !== this.pointerSession.pointerId) return;
+    
+                const session = this.pointerSession;
+    
+                this.clearLongPressTimer(session);
+                this.releasePointerCapture(session, event.pointerId);
+                this.removePointerListeners();
+    
+                const targetTableId = session.dragStarted
+                    ? this.findDropTableIdAtPoint(event.clientX, event.clientY)
+                    : null;
+    
+                const dragged = session.dragStarted;
+                const menuOpened = session.menuOpened;
+                const bookingId = session.bookingId;
+                const fromTableId = session.fromTableId;
+    
+                this.pointerSession = null;
+                this.dragPreview.visible = false;
+                this.hoverTableId = null;
+    
+                if (menuOpened) {
+                    this.suppressClicksUntil = Date.now() + 250;
+                    return;
+                }
+    
+                if (!dragged) {
+                    return;
+                }
+    
+                this.suppressClicksUntil = Date.now() + 250;
+    
+                if (!targetTableId || targetTableId === fromTableId) {
+                    this.dragging = null;
+                    return;
+                }
+    
+                await this.commitBookingMove(bookingId, fromTableId, targetTableId);
+            },
+    
+            onGlobalPointerCancel(event) {
+                if (!this.pointerSession) return;
+                if (event.pointerId !== this.pointerSession.pointerId) return;
+    
+                this.clearLongPressTimer(this.pointerSession);
+                this.releasePointerCapture(this.pointerSession, event.pointerId);
+                this.removePointerListeners();
+    
+                this.pointerSession = null;
+                this.dragging = null;
+                this.hoverTableId = null;
+                this.dragPreview.visible = false;
+            },
+    
+            clearLongPressTimer(session) {
+                if (!session?.longPressTimer) return;
+                window.clearTimeout(session.longPressTimer);
+                session.longPressTimer = null;
+            },
+    
+            releasePointerCapture(session, pointerId) {
+                const rowEl = session?.rowEl;
+    
+                if (
+                    rowEl &&
+                    rowEl.releasePointerCapture &&
+                    rowEl.hasPointerCapture &&
+                    rowEl.hasPointerCapture(pointerId)
+                ) {
+                    rowEl.releasePointerCapture(pointerId);
+                }
+            },
+    
+            removePointerListeners() {
+                if (!this.pointerListeners) return;
+    
+                window.removeEventListener('pointermove', this.pointerListeners.move);
+                window.removeEventListener('pointerup', this.pointerListeners.up);
+                window.removeEventListener('pointercancel', this.pointerListeners.cancel);
+    
+                this.pointerListeners = null;
+            },
+    
+            findDropTableIdAtPoint(clientX, clientY) {
+                const el = document.elementFromPoint(clientX, clientY);
+                const dropZone = el?.closest?.('[data-drop-table-id]');
+    
+                return dropZone ? dropZone.dataset.dropTableId : null;
+            },
+    
+            isDraggedBooking(tableId, bookingId) {
+                return this.dragging?.bookingId === bookingId
+                    && this.dragging?.fromTableId === tableId;
+            },
+    
+            hasBookingOnTable(bookingId, tableId) {
+                const table = this.tables.find(t => t.id === tableId);
+                return !!table?.bookings.some(b => b.id === bookingId);
+            },
+    
+            async commitBookingMove(bookingId, fromTableId, targetTableId) {
+                const snapshot = JSON.parse(JSON.stringify(this.tables));
+    
+                const moved = this.moveBookingLocally(
+                    bookingId,
+                    fromTableId,
+                    targetTableId
+                );
+    
+                if (!moved) {
+                    this.dragging = null;
+                    return;
+                }
+    
+                console.log('BOOKING MOVED', {
+                    bookingId,
+                    fromTableId,
+                    targetTableId,
+                });
+    
+                try {
+                    if (this.$wire && typeof this.$wire.moveBooking === 'function') {
+                        await this.$wire.moveBooking(
+                            bookingId,
+                            fromTableId,
+                            targetTableId
+                        );
+                    } else {
+                        console.log('Mock Livewire moveBooking', {
+                            bookingId,
+                            fromTableId,
+                            targetTableId,
+                        });
+                    }
+                } catch (error) {
+                    this.tables = snapshot;
+                    console.error(error);
+                } finally {
+                    this.dragging = null;
+                    this.refreshSelectedTable();
+                }
+            },
+    
+            async commitBookingAttach(bookingId, fromTableId, targetTableId) {
+                if (!bookingId || !fromTableId || !targetTableId) {
+                    this.cancelAddTableMode();
+                    return;
+                }
+    
+                if (fromTableId === targetTableId) {
+                    this.cancelAddTableMode();
+                    return;
+                }
+    
+                const snapshot = JSON.parse(JSON.stringify(this.tables));
+    
+                const attached = this.attachBookingLocally(
+                    bookingId,
+                    fromTableId,
+                    targetTableId
+                );
+    
+                if (!attached) {
+                    this.cancelAddTableMode();
+                    return;
+                }
+    
+                console.log('BOOKING ATTACHED TO EXTRA TABLE', {
+                    bookingId,
+                    fromTableId,
+                    targetTableId,
+                });
+    
+                try {
+                    if (this.$wire && typeof this.$wire.attachBookingToTable === 'function') {
+                        await this.$wire.attachBookingToTable(
+                            bookingId,
+                            fromTableId,
+                            targetTableId
+                        );
+                    } else {
+                        console.log('Mock Livewire attachBookingToTable', {
+                            bookingId,
+                            fromTableId,
+                            targetTableId,
+                        });
+                    }
+                } catch (error) {
+                    this.tables = snapshot;
+                    console.error(error);
+                } finally {
+                    this.cancelAddTableMode();
+                    this.refreshSelectedTable();
+                }
+            },
+    
+            async detachBookingFromMenu() {
+                const bookingId = this.bookingMenu.bookingId;
+                const tableId = this.bookingMenu.tableId;
+    
+                this.closeBookingMenu();
+    
+                if (!bookingId || !tableId) return;
+    
+                const snapshot = JSON.parse(JSON.stringify(this.tables));
+    
+                const detached = this.detachBookingLocally(bookingId, tableId);
+    
+                if (!detached) return;
+    
+                console.log('BOOKING DETACHED FROM TABLE', {
+                    bookingId,
+                    tableId,
+                });
+    
+                try {
+                    if (this.$wire && typeof this.$wire.detachBookingFromTable === 'function') {
+                        await this.$wire.detachBookingFromTable(bookingId, tableId);
+                    } else {
+                        console.log('Mock Livewire detachBookingFromTable', {
+                            bookingId,
+                            tableId,
+                        });
+                    }
+                } catch (error) {
+                    this.tables = snapshot;
+                    console.error(error);
+                } finally {
+                    this.refreshSelectedTable();
+                }
+            },
+    
+            moveBookingLocally(bookingId, fromTableId, toTableId) {
+                const fromTable = this.tables.find(t => t.id === fromTableId);
+                const toTable = this.tables.find(t => t.id === toTableId);
+    
+                if (!fromTable || !toTable) return false;
+    
+                const bookingIndex = fromTable.bookings.findIndex(b => b.id === bookingId);
+                if (bookingIndex === -1) return false;
+    
+                const alreadyExistsOnTarget = toTable.bookings.some(b => b.id === bookingId);
+                const [booking] = fromTable.bookings.splice(bookingIndex, 1);
+    
+                if (!alreadyExistsOnTarget) {
+                    toTable.bookings.push({ ...booking });
+                    toTable.bookings.sort((a, b) => a.time.localeCompare(b.time));
+                }
+    
+                return true;
+            },
+    
+            attachBookingLocally(bookingId, fromTableId, targetTableId) {
+                const fromTable = this.tables.find(t => t.id === fromTableId);
+                const targetTable = this.tables.find(t => t.id === targetTableId);
+    
+                if (!fromTable || !targetTable) return false;
+                if (fromTableId === targetTableId) return false;
+    
+                const booking = fromTable.bookings.find(b => b.id === bookingId);
+                if (!booking) return false;
+    
+                const alreadyExists = targetTable.bookings.some(b => b.id === bookingId);
+                if (alreadyExists) return false;
+    
+                targetTable.bookings.push({ ...booking });
+                targetTable.bookings.sort((a, b) => a.time.localeCompare(b.time));
+    
+                return true;
+            },
+    
+            detachBookingLocally(bookingId, tableId) {
+                const table = this.tables.find(t => t.id === tableId);
+                if (!table) return false;
+    
+                const bookingIndex = table.bookings.findIndex(b => b.id === bookingId);
+                if (bookingIndex === -1) return false;
+    
+                table.bookings.splice(bookingIndex, 1);
+                return true;
+            },
+    
+            tableStyle(table) {
+                return `transform: translate(${table.x}px, ${table.y}px) rotate(0deg);`;
+            },
+    
+            tableCssClasses(table) {
+                const classes = ['table-item'];
+    
+                classes.push(
+                    table.shape === 'rectangle'
+                        ? 'table-rectangle'
+                        : table.shape === 'circle'
+                            ? 'table-circle'
+                            : 'table-square'
+                );
+    
+                classes.push(this.tableStatusClass(table));
+    
+                if (this.hoverTableId === table.id) {
+                    classes.push('table-drop-hover');
+                }
+    
+                if (this.addTableMode.active) {
+                    if (table.id === this.addTableMode.fromTableId) {
+                        classes.push('table-add-mode-source');
+                    } else if (!this.hasBookingOnTable(this.addTableMode.bookingId, table.id)) {
+                        classes.push('table-add-mode-target');
+                    }
+                }
+    
+                return classes.join(' ');
+            },
+    
+            tableStatusClass(table) {
+                if (table.bookings.length === 0) return 'table-free';
+    
+                return table.bookings.length >= table.max
+                    ? 'table-occupied'
+                    : 'table-partial';
+            }
+        };
+    }
+</script>
+</body>
+</html>
